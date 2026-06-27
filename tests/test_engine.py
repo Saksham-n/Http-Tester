@@ -1,8 +1,21 @@
 import pytest
-from aioresponses import aioresponses
+from unittest.mock import patch
 from pyload.config import PyLoadConfig
 from pyload.metrics import MetricsCollector
 from pyload.engine import PyLoadEngine
+
+class MockResponse:
+    def __init__(self, status):
+        self.status = status
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    async def read(self):
+        return b""
 
 @pytest.mark.asyncio
 async def test_engine_successful_requests():
@@ -10,8 +23,7 @@ async def test_engine_successful_requests():
     metrics = MetricsCollector()
     engine = PyLoadEngine(config, metrics)
     
-    with aioresponses() as m:
-        m.get('http://example.com/', status=200, repeat=True)
+    with patch('aiohttp.ClientSession.request', return_value=MockResponse(200)):
         await engine.run()
         
     result = metrics.calculate()
@@ -26,8 +38,7 @@ async def test_engine_failed_requests():
     metrics = MetricsCollector()
     engine = PyLoadEngine(config, metrics)
     
-    with aioresponses() as m:
-        m.get('http://example.com/', status=500, repeat=True)
+    with patch('aiohttp.ClientSession.request', return_value=MockResponse(500)):
         await engine.run()
         
     result = metrics.calculate()
@@ -35,3 +46,4 @@ async def test_engine_failed_requests():
     assert result["successful_requests"] == 0
     assert result["failed_requests"] == 3
     assert result["status_codes"][500] == 3
+
